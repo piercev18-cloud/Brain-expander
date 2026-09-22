@@ -1,4 +1,5 @@
-import { agent, countWords, polite, slug, tidy, type Ctx, type Form, type RawItem, type Source } from '../shared'
+import { agent, countWords, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
+import { SLOT_WORDS } from '../../../src/lib/budget'
 import { WIKISOURCE_CATEGORIES } from '../seed/wikisource'
 
 const API = 'https://en.wikisource.org/w/api.php'
@@ -81,12 +82,6 @@ async function headers(titles: string[], ctx: Ctx): Promise<Map<string, { author
   return out
 }
 
-const BOUNDS: Record<Form, [number, number]> = {
-  story: [900, 14000],
-  essay: [700, 18000],
-  poem: [40, 3000],
-}
-
 /**
  * Wikisource is per-work rather than per-book, which is what makes it the right
  * spine for the story and essay slots: nothing has to be cut out of a collection.
@@ -109,7 +104,7 @@ export const wikisource: Source = {
       if (titles.length === 0) continue
 
       const [bodies, meta] = await Promise.all([extracts(titles, ctx), headers(titles, ctx)])
-      const [min, max] = BOUNDS[entry.form]
+      const [min, max] = SLOT_WORDS[entry.form]
 
       for (const title of titles) {
         if (out.length >= ctx.limit) break

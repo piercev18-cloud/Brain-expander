@@ -1,5 +1,6 @@
 import { agent, countWords, firstSentences, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
 import { GUTENBERG_TOPICS } from '../seed/gutenberg'
+import { SLOT_WORDS } from '../../../src/lib/budget'
 
 interface Book {
   id: number
@@ -76,7 +77,10 @@ export const gutenberg: Source = {
 
         const body = stripBoilerplate(typeof raw === 'string' ? raw : String(raw))
         const words = countWords(body)
-        if (words < 800 || words > 18000) continue
+        // Most Gutenberg texts are whole volumes; the budget is what selects the
+        // single essay and the lecture out of them.
+        const [min, max] = SLOT_WORDS.essay
+        if (words < min || words > max) continue
 
         const author = book.authors[0]
         out.push({

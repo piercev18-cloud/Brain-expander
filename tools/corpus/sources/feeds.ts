@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
-import { agent, polite, slug, type Ctx, type Form, type RawItem, type Source } from '../shared'
+import { agent, countWords, polite, slug, type Ctx, type Form, type RawItem, type Source } from '../shared'
+import { SLOT_WORDS } from '../../../src/lib/budget'
 
 interface Feed {
   url: string
@@ -72,6 +73,18 @@ export const feeds: Source = {
         ).slice(0, 600)
         if (!title || !link || summary.length < 60) continue
 
+        /*
+         * These pieces are read at the publisher, so their length has to come from
+         * the feed itself. Most of these feeds carry the whole article in
+         * content:encoded, which gives a real word count. When a feed does not, the
+         * length is unknowable and the item is dropped rather than risk a 40-minute
+         * essay landing in a 30-minute night.
+         */
+        const full = stripHtml(text(entry['content:encoded']) || text(entry.content))
+        const words = countWords(full)
+        const [min, max] = SLOT_WORDS[feed.form]
+        if (words < min || words > max) continue
+
         const published = text(entry.pubDate) || text(entry.published) || text(entry.updated)
         const author = stripHtml(text(entry['dc:creator']) || text(entry.author)) || feed.publisher
 
@@ -85,6 +98,7 @@ export const feeds: Source = {
           license: `© ${feed.publisher}`,
           subjects: [...feed.subjects, ...(Array.isArray(entry.category) ? entry.category.map(text) : [text(entry.category)])],
           summary,
+          sourceWords: words,
           source: 'feeds',
         })
       }

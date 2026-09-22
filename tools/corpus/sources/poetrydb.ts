@@ -1,5 +1,6 @@
 import { agent, countWords, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
 import { POETS } from '../seed/poets'
+import { SLOT_WORDS } from '../../../src/lib/budget'
 
 interface Poem {
   title: string
@@ -35,8 +36,8 @@ export const poetrydb: Source = {
       for (const poem of poems) {
         if (out.length >= ctx.limit) break
         const lines = poem.lines?.filter((l) => l !== undefined) ?? []
-        // Skip fragments and anything long enough to be a whole book.
-        if (lines.length < 4 || lines.length > 400) continue
+        // Skip fragments, and book-length verse that would swallow the whole night.
+        if (lines.length < 4 || lines.length > 90) continue
 
         // Blank lines separate stanzas; the reader preserves line breaks inside them.
         const body = tidy(lines.join('\n'))
@@ -56,6 +57,10 @@ export const poetrydb: Source = {
       ctx.log(`  poetrydb: ${poet.name} → ${out.length} poems so far`)
     }
 
-    return out.filter((item) => countWords(item.body ?? '') >= 20)
+    const [min, max] = SLOT_WORDS.poem
+    return out.filter((item) => {
+      const words = countWords(item.body ?? '')
+      return words >= min && words <= max
+    })
   },
 }

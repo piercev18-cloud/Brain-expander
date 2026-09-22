@@ -21,6 +21,21 @@ The three are dealt from the corpus by a seeded draw, so a refresh never re-roll
 and nothing repeats across all 1000 nights. A night you open but do not finish returns
 its pieces to the pool: skipping a night costs you nothing.
 
+**A night always fits in half an hour.** Bradbury's own estimate for the story was
+"ten minutes, fifteen minutes", so each slot carries a word budget and no night can run
+past 30 minutes even when all three pieces come in long:
+
+| Slot | Words | Minutes at 200 wpm |
+|---|---|---|
+| Short story | 900 – 2,800 | 4.5 – 14 |
+| Poem | 40 – 500 | 0.2 – 2.5 |
+| Essay | 700 – 2,400 | 3.5 – 12 |
+| **Longest possible night** | **5,700** | **28.5** |
+
+Those numbers live in one place, `src/lib/budget.ts`. Every source is gated against
+them, the build fails if anything slips through, and the Tonight screen totals what is
+actually left to read. Change the table there and the whole pipeline follows.
+
 Flag anything worth returning to and it lands in **Saved**, with a note if you want one.
 **Fields** shows where your reading actually concentrates — bars scaled against your
 most-read field, and a plain list of the fields you have never once touched.
@@ -81,7 +96,17 @@ Sources, all free, most needing no key at all:
 |---|---|---|
 | Poem | PoetryDB, Wikisource, Gutenberg | — |
 | Short story | Wikisource, Gutenberg | Clarkesworld, Strange Horizons, Reactor |
-| Essay | Wikisource, Gutenberg | The Guardian, Aeon, Nautilus, Quanta, arXiv, The Marginalian |
+| Essay | Wikisource, Gutenberg | The Guardian, Aeon, Nautilus, Quanta, The Marginalian |
+
+A piece read at the source still has to fit the budget, so its length must be knowable
+before it enters the corpus: The Guardian reports a word count, and the RSS feeds carry
+the full article in `content:encoded`. A feed item whose length cannot be established is
+dropped rather than risk a 40-minute essay landing in a 30-minute night.
+
+**arXiv is included but off by default.** A research paper has no upper bound on length
+and is not a bedtime essay. Run it deliberately with `npm run corpus -- --only arxiv` if
+you want it. Mathematics and physics otherwise arrive through Quanta, Gutenberg's
+mathematics and astronomy topics, and Wikisource's science categories.
 
 **The licence rule is enforced in code.** Full text is stored only when a piece is public
 domain or CC-BY/CC-BY-SA. Everything else is kept as metadata plus the publisher's own
@@ -89,6 +114,10 @@ summary and a link, and the build fails outright if any item claims full text wi
 redistributable licence. This is why The Guardian appears as a link-out: the API does
 return body text and the developer tier covers using it, but committing that text into a
 public repository is republication, which the tier does not cover.
+
+The starter corpus committed here is 12 hand-checked pieces — ten poems in full, two
+stories linked — enough to open the app and see it work. The essay slot is empty until
+the corpus workflow runs, which happens automatically on the first push to `main`.
 
 **Field tagging is deterministic, not model-based** — subject headings, arXiv categories
 and per-feed mappings run through a keyword table in `tools/corpus/tag.ts`. Reproducible,
@@ -98,11 +127,12 @@ and a mistake is fixed by adding one line to `tools/corpus/overrides.json`.
 
 ```bash
 npm run dev                      # local dev server
-npm test                         # night boundaries, deal determinism, merge safety
+npm test                         # night boundaries, deal determinism, merge safety, budget
 npm run build                    # production build
 npm run corpus -- --dry-run      # collect and validate, write nothing
 npm run corpus -- --limit 40     # cap each source
 npm run corpus -- --only feeds   # run one source
+CORPUS_TIMEOUT_MS=1500 npm run corpus -- --dry-run   # fail fast on a restricted network
 npx tsx tools/corpus/bootstrap.ts   # the small starter corpus
 node tools/make-icons.mjs           # regenerate app icons
 ```

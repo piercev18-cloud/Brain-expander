@@ -12,6 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { FIELDS, type IndexEntry, type Item } from '../../src/lib/types'
 import { countWords, decideMode, mayStoreFullText, type RawItem, type Source } from './shared'
+import { NIGHT_BUDGET_MINUTES, SLOT_WORDS, minutes, withinBudget, worstCaseNightMinutes } from '../../src/lib/budget'
 import { tagFields } from './tag'
 import { poetrydb } from './sources/poetrydb'
 import { wikisource } from './sources/wikisource'
@@ -20,7 +21,13 @@ import { guardian } from './sources/guardian'
 import { feeds } from './sources/feeds'
 import { arxiv } from './sources/arxiv'
 
-const SOURCES: Source[] = [poetrydb, wikisource, gutenberg, guardian, feeds, arxiv]
+/*
+ * arXiv is kept but not run by default: a research paper has no upper bound on
+ * length and is not a bedtime essay, so it cannot honour the night budget.
+ * Re-enable it deliberately with `npm run corpus -- --only arxiv`.
+ */
+const SOURCES: Source[] = [poetrydb, wikisource, gutenberg, guardian, feeds]
+const OPT_IN: Source[] = [arxiv]
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT = join(ROOT, 'public', 'corpus')
@@ -56,8 +63,9 @@ async function main() {
 
   const collected: RawItem[] = []
 
-  for (const source of SOURCES) {
-    if (only && !only.includes(source.name)) continue
+  // Opt-in sources run only when named explicitly.
+  for (const source of [...SOURCES, ...OPT_IN]) {
+    if (only ? !only.includes(source.name) : OPT_IN.includes(source)) continue
 
     const missing = (source.requires ?? []).filter((key) => !ctx.secrets[key])
     if (missing.length > 0) {
@@ -116,22 +124,30 @@ async function main() {
     })
   }
 
-  /* Gates. A failure here means the corpus is wrong, so the build stops. */
-  const untagged = fresh.filter((item) => item.fields.length === 0)
-  const illegal = fresh.filter((item) => item.mode === 'full' && !mayStoreFullText(item.license))
-  const unreadable = fresh.filter((item) => item.mode === 'full' && !item.body)
-
-  if (untagged.length || illegal.length || unreadable.length) {
-    if (untagged.length) log(`FAIL: ${untagged.length} items carry no field tag`)
-    if (illegal.length) log(`FAIL: ${illegal.length} items store full text without a redistributable licence`)
-    if (unreadable.length) log(`FAIL: ${unreadable.length} items claim full text but have no body`)
-    process.exit(1)
-  }
-
   const index: IndexEntry[] = [
     ...existingIndex,
     ...fresh.map(({ body: _body, summary: _summary, url: _url, license: _license, ...entry }) => entry),
   ]
+
+  /* Gates. A failure here means the corpus is wrong, so the build stops. */
+  const untagged = fresh.filter((item) => item.fields.length === 0)
+  const illegal = fresh.filter((item) => item.mode === 'full' && !mayStoreFullText(item.license))
+  const unreadable = fresh.filter((item) => item.mode === 'full' && !item.body)
+  // Checked across the whole corpus, not only this run's additions: an item that
+  // busts the budget breaks the promise however it got in.
+  const overlong = index.filter((item) => !withinBudget(item.form, item.words))
+
+  if (untagged.length || illegal.length || unreadable.length || overlong.length) {
+    if (untagged.length) log(`FAIL: ${untagged.length} items carry no field tag`)
+    if (illegal.length) log(`FAIL: ${illegal.length} items store full text without a redistributable licence`)
+    if (unreadable.length) log(`FAIL: ${unreadable.length} items claim full text but have no body`)
+    for (const item of overlong.slice(0, 10)) {
+      const [min, max] = SLOT_WORDS[item.form]
+      log(`FAIL: ${item.form} "${item.title}" is ${item.words} words (${Math.round(minutes(item.words))} min); the slot allows ${min}-${max}`)
+    }
+    if (overlong.length > 10) log(`FAIL: and ${overlong.length - 10} more outside the night budget`)
+    process.exit(1)
+  }
 
   log('')
   log(`Corpus: ${index.length} items (${fresh.length} new this run)`)
@@ -141,6 +157,7 @@ async function main() {
     log(`  ${form.padEnd(6)} ${String(rows.length).padStart(5)}  (${full} readable in-app, ${rows.length - full} link out)`)
   }
   log(`  nights available: ${Math.min(...(['story', 'poem', 'essay'] as const).map((f) => index.filter((e) => e.form === f).length))}`)
+  log(`  longest possible night: ${worstCaseNightMinutes().toFixed(0)} min (budget ${NIGHT_BUDGET_MINUTES})`)
   log('')
   for (const field of FIELDS) {
     const count = index.filter((e) => e.fields.includes(field)).length

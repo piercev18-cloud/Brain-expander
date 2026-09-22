@@ -1,4 +1,4 @@
-import { readingTime } from '../lib/corpus'
+import { readingMinutes, readingTime } from '../lib/corpus'
 import { isComplete } from '../lib/progress'
 import { FIELD_LABEL, FORMS, FORM_LABEL, type Form, type IndexEntry } from '../lib/types'
 import { Counter } from '../ui/Counter'
@@ -59,6 +59,14 @@ export function Tonight({ app, onOpen }: { app: App; onOpen: (id: string) => voi
   const complete = isComplete(record)
   const remaining = FORMS.filter((f) => !record?.done.includes(f)).length
 
+  // What is actually left to read tonight, so the ask is never a surprise.
+  const minutesLeft = FORMS.reduce((total, form) => {
+    if (record?.done.includes(form)) return total
+    const id = app.dealt[form]
+    const entry = id ? app.byId.get(id) : undefined
+    return total + (entry?.words ? readingMinutes(entry.words) : 0)
+  }, 0)
+
   return (
     <>
       <Counter stats={app.stats} msToRollover={app.msToRollover} syncState={app.syncState} />
@@ -67,7 +75,9 @@ export function Tonight({ app, onOpen }: { app: App; onOpen: (id: string) => voi
 
       <section className="night">
         <h1 className="night__label">
-          {complete ? 'Tonight — done' : `Tonight — ${remaining} to go`}
+          {complete
+            ? 'Tonight — done'
+            : `Tonight — ${remaining} to go${minutesLeft > 0 ? ` · about ${minutesLeft} min` : ''}`}
         </h1>
         {FORMS.map((form) => {
           const id = app.dealt[form]
