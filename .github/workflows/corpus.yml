@@ -1,0 +1,77 @@
+name: Corpus
+
+# Builds the reading corpus and commits it. This is the only place with network
+# access to the sources, which is why no API key ever reaches the phone.
+on:
+  schedule:
+    # Weekly, Sunday 09:00 UTC. New pieces appear without any action from you.
+    - cron: '0 9 * * 0'
+  push:
+    branches: [main]
+    # Deliberately narrow: a commit of corpus data must not re-trigger this workflow.
+    paths:
+      - 'tools/corpus/**'
+      - '.github/workflows/corpus.yml'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Maximum new items per source'
+        required: false
+        default: '400'
+      only:
+        description: 'Comma-separated source names, or blank for all'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: corpus
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Collect
+        env:
+          # Every one of these is optional. A missing secret skips its source
+          # with a warning rather than failing the run.
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          DPLA_API_KEY: ${{ secrets.DPLA_API_KEY }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+          # Dispatch inputs go through the environment, never interpolated into the
+          # shell line, so a crafted input cannot become a command.
+          LIMIT: ${{ github.event.inputs.limit || '400' }}
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          if [ -n "$ONLY" ]; then
+            npm run corpus -- --limit "$LIMIT" --only "$ONLY"
+          else
+            npm run corpus -- --limit "$LIMIT"
+          fi
+
+      - name: Commit
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add public/corpus
+          if git diff --staged --quiet; then
+            echo 'No new pieces this run.'
+            exit 0
+          fi
+          COUNT=$(node -e "console.log(require('./public/corpus/index.json').length)")
+          git commit -m "corpus: $COUNT pieces"
+          git push
