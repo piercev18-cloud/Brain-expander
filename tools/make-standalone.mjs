@@ -14,11 +14,13 @@
  * declares it rather than trusting the host.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const outDir = process.argv[2] ?? 'dist-preview'
+// A clean checkout has no build directory yet, which is exactly the case CI runs.
+mkdirSync(outDir, { recursive: true })
 const dir = mkdtempSync(join(tmpdir(), 'standalone-'))
 
 execFileSync('npx', ['vite', 'build', '--outDir', dir, '--emptyOutDir'], {

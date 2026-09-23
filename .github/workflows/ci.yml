@@ -1,0 +1,67 @@
+name: CI
+
+# Deploy runs only on main, so without this a pull request merges with nothing
+# having validated it. This workflow never deploys and never writes.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        env:
+          APP_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Single-file build
+        run: node tools/make-standalone.mjs
+
+  # The corpus adapters talk to services this repository does not control, so their
+  # health is reported rather than enforced: a source being down is not a reason to
+  # block a pull request. Read this job's log when changing anything under
+  # tools/corpus — it is the only place the adapters meet the real endpoints.
+  corpus-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Collect a couple of pieces from every keyless source
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+        run: npm run corpus -- --dry-run --limit 2
