@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 import { agent, countWords, polite, slug, type Ctx, type Form, type RawItem, type Source } from '../shared'
-import { SLOT_WORDS } from '../../../src/lib/budget'
+import { CORPUS_BOUNDS } from '../../../src/lib/curation'
 
 interface Feed {
   url: string
@@ -74,15 +74,14 @@ export const feeds: Source = {
         if (!title || !link || summary.length < 60) continue
 
         /*
-         * These pieces are read at the publisher, so their length has to come from
-         * the feed itself. Most of these feeds carry the whole article in
-         * content:encoded, which gives a real word count. When a feed does not, the
-         * length is unknowable and the item is dropped rather than risk a 40-minute
-         * essay landing in a 30-minute night.
+         * These pieces are read at the publisher, so their length has to come from the
+         * feed itself. Most of these feeds carry the whole article in content:encoded,
+         * which gives a real word count. Without one the app could not estimate the
+         * night honestly, so the item is dropped rather than shown with no time at all.
          */
         const full = stripHtml(text(entry['content:encoded']) || text(entry.content))
         const words = countWords(full)
-        const [min, max] = SLOT_WORDS[feed.form]
+        const [min, max] = CORPUS_BOUNDS[feed.form]
         if (words < min || words > max) continue
 
         const published = text(entry.pubDate) || text(entry.published) || text(entry.updated)

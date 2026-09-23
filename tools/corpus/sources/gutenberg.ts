@@ -1,6 +1,6 @@
 import { agent, countWords, firstSentences, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
 import { GUTENBERG_TOPICS } from '../seed/gutenberg'
-import { SLOT_WORDS } from '../../../src/lib/budget'
+import { CORPUS_BOUNDS } from '../../../src/lib/curation'
 
 interface Book {
   id: number
@@ -77,9 +77,9 @@ export const gutenberg: Source = {
 
         const body = stripBoilerplate(typeof raw === 'string' ? raw : String(raw))
         const words = countWords(body)
-        // Most Gutenberg texts are whole volumes; the budget is what selects the
-        // single essay and the lecture out of them.
-        const [min, max] = SLOT_WORDS.essay
+        // Most Gutenberg texts are whole volumes; the bound selects the pamphlet,
+        // the lecture and the single long essay out of them.
+        const [min, max] = CORPUS_BOUNDS.essay
         if (words < min || words > max) continue
 
         const author = book.authors[0]

@@ -30,6 +30,19 @@ export function mulberry32(seed: number): () => number {
 
 export type Pools = Record<Form, string[]>
 
+/**
+ * Attempt 0 keeps the original seed string, so a deal drawn before swaps existed
+ * still draws the same piece today.
+ */
+function seedFor(salt: string, index: number, form: Form, attempt: number): string {
+  return attempt === 0 ? `${salt}|${index}|${form}` : `${salt}|${index}|${form}|${attempt}`
+}
+
+function draw(from: string[], salt: string, index: number, form: Form, attempt: number): string {
+  const rng = mulberry32(xmur3(seedFor(salt, index, form, attempt))())
+  return from[Math.floor(rng() * from.length)]
+}
+
 /** Pools are sorted so that a corpus addition never reshuffles the ids already present. */
 export function buildPools(index: IndexEntry[]): Pools {
   const pools = { story: [] as string[], poem: [] as string[], essay: [] as string[] }
@@ -75,10 +88,41 @@ export function dealNight(
     if (pool.length === 0) continue
     const available = pool.filter((id) => !consumed.has(id))
     const from = available.length > 0 ? available : pool
-    const rng = mulberry32(xmur3(`${salt}|${index}|${form}`)())
-    out[form] = from[Math.floor(rng() * from.length)]
+    out[form] = draw(from, salt, index, form, 0)
   }
   return out
+}
+
+/**
+ * Another piece for one slot, for when tonight runs longer than you have.
+ *
+ * Deterministic in the number of swaps already made, so pressing the button twice and
+ * reloading in between gives the same answer. Returns null when there is nothing left
+ * to offer — including when `maxWords` is set and nothing in the pool is shorter,
+ * which the caller should say out loud rather than quietly serving something longer.
+ */
+export function alternative(
+  index: number,
+  salt: string,
+  form: Form,
+  pools: Pools,
+  consumed: ReadonlySet<string>,
+  passed: readonly string[],
+  wordsOf: (id: string) => number,
+  maxWords?: number,
+): string | null {
+  const taken = new Set([...consumed, ...passed])
+  const candidates = pools[form].filter((id) => !taken.has(id))
+  if (candidates.length === 0) return null
+
+  if (maxWords === undefined) return draw(candidates, salt, index, form, passed.length + 1)
+
+  const shorter = candidates.filter((id) => {
+    const words = wordsOf(id)
+    return words > 0 && words < maxWords
+  })
+  if (shorter.length === 0) return null
+  return draw(shorter, salt, index, form, passed.length + 1)
 }
 
 /**

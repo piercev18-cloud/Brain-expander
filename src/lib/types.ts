@@ -75,6 +75,11 @@ export interface NightRecord {
   /** Recorded on first interaction so a night is auditable even if the corpus changes. */
   dealt: Partial<Record<Form, string>>
   done: Form[]
+  /**
+   * Pieces passed over on this night, oldest first. They return to the pool for a
+   * longer night, and they make each swap deterministic rather than a fresh gamble.
+   */
+  passed?: Partial<Record<Form, string[]>>
   completedAt?: string
 }
 
@@ -112,6 +117,11 @@ export interface Settings {
   branch: string
   path: string
   fontScale: number
+  /**
+   * A soft target for a night, in minutes. Never a limit: it decides when the app
+   * offers a swap, and nothing more. null means show the estimate and never suggest.
+   */
+  nightlyMinutes: number | null
 }
 
 export const TARGET_NIGHTS = 1000
@@ -124,4 +134,5 @@ export const DEFAULT_SETTINGS: Settings = {
   branch: 'state',
   path: 'state/progress.json',
   fontScale: 1,
+  nightlyMinutes: 30,
 }

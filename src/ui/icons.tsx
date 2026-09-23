@@ -51,6 +51,14 @@ export function Gear({ size = 20 }: Props) {
   )
 }
 
+export function Swap({ size = 15 }: Props) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" {...stroke} />
+    </svg>
+  )
+}
+
 export function External({ size = 16 }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

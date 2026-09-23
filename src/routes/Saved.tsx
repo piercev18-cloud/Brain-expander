@@ -94,7 +94,7 @@ export function Saved({ app, onOpen }: { app: App; onOpen: (id: string) => void 
                 <div className="card__author">{entry.author}{entry.year ? ` · ${entry.year}` : ''}</div>
               </button>
               <div className="card__meta">
-                {readingTime(entry.words) && <span>{readingTime(entry.words)}</span>}
+                {readingTime(entry.form, entry.words) && <span>{readingTime(entry.form, entry.words)}</span>}
                 {entry.fields.slice(0, 2).map((f) => (
                   <span className="tag" key={f}>{FIELD_LABEL[f]}</span>
                 ))}

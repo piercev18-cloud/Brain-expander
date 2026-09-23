@@ -1,5 +1,5 @@
 import { agent, countWords, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
-import { SLOT_WORDS } from '../../../src/lib/budget'
+import { CORPUS_BOUNDS } from '../../../src/lib/curation'
 import { WIKISOURCE_CATEGORIES } from '../seed/wikisource'
 
 const API = 'https://en.wikisource.org/w/api.php'
@@ -104,7 +104,7 @@ export const wikisource: Source = {
       if (titles.length === 0) continue
 
       const [bodies, meta] = await Promise.all([extracts(titles, ctx), headers(titles, ctx)])
-      const [min, max] = SLOT_WORDS[entry.form]
+      const [min, max] = CORPUS_BOUNDS[entry.form]
 
       for (const title of titles) {
         if (out.length >= ctx.limit) break

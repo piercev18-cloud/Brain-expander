@@ -58,7 +58,9 @@ export function Reader({ app, id, onBack }: { app: App; id: string; onBack: () =
         {item.year ? ` · ${item.year}` : ''}
       </div>
       <div className="reader__meta">
-        {readingTime(item.words) && <span className="tag">{readingTime(item.words)}</span>}
+        {readingTime(item.form, item.words) && (
+          <span className="tag">{readingTime(item.form, item.words)}</span>
+        )}
         {item.fields.map((f) => (
           <span className="tag" key={f}>{FIELD_LABEL[f]}</span>
         ))}

@@ -1,6 +1,6 @@
 import { agent, countWords, polite, slug, tidy, type Ctx, type RawItem, type Source } from '../shared'
 import { POETS } from '../seed/poets'
-import { SLOT_WORDS } from '../../../src/lib/budget'
+import { CORPUS_BOUNDS } from '../../../src/lib/curation'
 
 interface Poem {
   title: string
@@ -36,8 +36,9 @@ export const poetrydb: Source = {
       for (const poem of poems) {
         if (out.length >= ctx.limit) break
         const lines = poem.lines?.filter((l) => l !== undefined) ?? []
-        // Skip fragments, and book-length verse that would swallow the whole night.
-        if (lines.length < 4 || lines.length > 90) continue
+        // Skip fragments and book-length verse; length within that is the curation
+        // engine's business at deal time, not a reason to exclude a poem.
+        if (lines.length < 4 || lines.length > 400) continue
 
         // Blank lines separate stanzas; the reader preserves line breaks inside them.
         const body = tidy(lines.join('\n'))
@@ -57,7 +58,7 @@ export const poetrydb: Source = {
       ctx.log(`  poetrydb: ${poet.name} → ${out.length} poems so far`)
     }
 
-    const [min, max] = SLOT_WORDS.poem
+    const [min, max] = CORPUS_BOUNDS.poem
     return out.filter((item) => {
       const words = countWords(item.body ?? '')
       return words >= min && words <= max

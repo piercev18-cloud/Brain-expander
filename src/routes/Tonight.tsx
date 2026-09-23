@@ -1,18 +1,21 @@
-import { readingMinutes, readingTime } from '../lib/corpus'
+import { useState } from 'react'
+import { formatMinutes } from '../lib/curation'
 import { isComplete } from '../lib/progress'
 import { FIELD_LABEL, FORMS, FORM_LABEL, type Form, type IndexEntry } from '../lib/types'
 import { Counter } from '../ui/Counter'
-import { Check } from '../ui/icons'
+import { Check, Swap } from '../ui/icons'
 import type { App } from '../lib/useApp'
 
 function Card({
-  entry, form, done, onToggle, onOpen,
+  entry, form, done, minutes, onToggle, onOpen, onSwap,
 }: {
   entry: IndexEntry | undefined
   form: Form
   done: boolean
+  minutes?: number
   onToggle: () => void
   onOpen: () => void
+  onSwap: () => void
 }) {
   if (!entry) {
     return (
@@ -35,37 +38,50 @@ function Card({
       >
         {done && <Check />}
       </button>
-      <button className="card__body" onClick={onOpen} style={{ background: 'none', border: 0, padding: 0 }}>
-        <div className="card__form">{FORM_LABEL[form]}</div>
-        <div className="card__title">{entry.title}</div>
-        <div className="card__author">
-          {entry.author}
-          {entry.year ? ` · ${entry.year}` : ''}
-        </div>
+      <div className="card__body">
+        <button className="card__open" onClick={onOpen}>
+          <div className="card__form">{FORM_LABEL[form]}</div>
+          <div className="card__title">{entry.title}</div>
+          <div className="card__author">
+            {entry.author}
+            {entry.year ? ` · ${entry.year}` : ''}
+          </div>
+        </button>
         <div className="card__meta">
-          {readingTime(entry.words) && <span>{readingTime(entry.words)}</span>}
+          {minutes ? <span>{formatMinutes(minutes)}</span> : null}
           {entry.fields.slice(0, 2).map((f) => (
             <span className="tag" key={f}>{FIELD_LABEL[f]}</span>
           ))}
           {entry.mode === 'link' && <span className="tag">links out</span>}
+          {!done && (
+            <button className="swap" onClick={onSwap} title="Take a different piece for this slot">
+              <Swap /> Swap
+            </button>
+          )}
         </div>
-      </button>
+      </div>
     </div>
   )
 }
 
 export function Tonight({ app, onOpen }: { app: App; onOpen: (id: string) => void }) {
+  const [dismissed, setDismissed] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
   const record = app.progress.nights[app.todayKey]
   const complete = isComplete(record)
   const remaining = FORMS.filter((f) => !record?.done.includes(f)).length
+  const { estimate, suggestSwap } = app
 
-  // What is actually left to read tonight, so the ask is never a surprise.
-  const minutesLeft = FORMS.reduce((total, form) => {
-    if (record?.done.includes(form)) return total
-    const id = app.dealt[form]
-    const entry = id ? app.byId.get(id) : undefined
-    return total + (entry?.words ? readingMinutes(entry.words) : 0)
-  }, 0)
+  const trySwap = (form: Form, shorterOnly: boolean) => {
+    setNote(
+      app.swap(form, shorterOnly)
+        ? null
+        : shorterOnly
+          ? 'Nothing shorter left in that slot tonight.'
+          : 'Nothing else left in that slot tonight.',
+    )
+  }
 
   return (
     <>
@@ -77,18 +93,45 @@ export function Tonight({ app, onOpen }: { app: App; onOpen: (id: string) => voi
         <h1 className="night__label">
           {complete
             ? 'Tonight — done'
-            : `Tonight — ${remaining} to go${minutesLeft > 0 ? ` · about ${minutesLeft} min` : ''}`}
+            : `Tonight — ${remaining} to go${estimate.remaining > 0 ? ` · about ${formatMinutes(estimate.remaining)}` : ''}`}
         </h1>
+
+        {suggestSwap && !dismissed && !complete && (
+          <div className="nudge">
+            <p className="nudge__text">
+              Tonight runs about <b>{formatMinutes(estimate.remaining)}</b>, more than the{' '}
+              {formatMinutes(app.settings.nightlyMinutes!)} you usually have. The{' '}
+              {FORM_LABEL[suggestSwap].toLowerCase()} is{' '}
+              <b>{formatMinutes(estimate.perSlot[suggestSwap] ?? 0)}</b> of it.
+            </p>
+            <div className="nudge__actions">
+              <button className="button" onClick={() => trySwap(suggestSwap, true)}>
+                Something shorter
+              </button>
+              <button className="button button--quiet" onClick={() => setDismissed(true)}>
+                Read it anyway
+              </button>
+            </div>
+            <p className="field__hint" style={{ marginTop: 10 }}>
+              A piece you pass over is not lost — it goes back in the pool for a night you have more time.
+            </p>
+          </div>
+        )}
+
+        {note && <div className="status" style={{ marginTop: 14 }}>{note}</div>}
+
         {FORMS.map((form) => {
           const id = app.dealt[form]
           return (
             <Card
               key={form}
               form={form}
-              entry={id ? app.byId.get(id) : undefined}
+              entry={app.entries[form]}
               done={!!record?.done.includes(form)}
+              minutes={estimate.perSlot[form]}
               onToggle={() => app.toggleDone(form)}
               onOpen={() => id && onOpen(id)}
+              onSwap={() => trySwap(form, false)}
             />
           )
         })}

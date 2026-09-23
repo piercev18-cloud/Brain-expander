@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildPools, dealFor, type Pools } from './deal'
+import { alternative, buildPools, consumedBefore, dealFor, type Pools } from './deal'
 import { loadIndex, prefetch } from './corpus'
 import { msUntilRollover, nightIndexFor, nightKey } from './night'
 import {
   emptyProgress, newSalt, recordDeal, setNote as setNoteOn, stats as computeStats,
-  toggleDone as toggleDoneOn, toggleSaved as toggleSavedOn, type Stats,
+  swapSlot as swapSlotOn, toggleDone as toggleDoneOn, toggleSaved as toggleSavedOn, type Stats,
 } from './progress'
 import { KEYS, get, set } from './store'
 import { isConfigured, restore as restoreRemote, sync as syncRemote, type SyncState } from './sync'
+import { estimateNight, heaviestSlot, overTarget, type NightEstimate } from './curation'
 import { DEFAULT_SETTINGS, FORMS, type Form, type IndexEntry, type Progress, type Settings } from './types'
 
 const SYNC_DEBOUNCE_MS = 1500
@@ -23,6 +24,10 @@ export interface App {
   todayKey: string
   nightIndex: number
   dealt: Partial<Record<Form, string>>
+  entries: Partial<Record<Form, IndexEntry | undefined>>
+  estimate: NightEstimate
+  /** The slot worth offering a swap on, or null when tonight already fits. */
+  suggestSwap: Form | null
   stats: Stats
   msToRollover: number
   syncState: SyncState
@@ -30,6 +35,8 @@ export interface App {
   toggleDone: (form: Form) => void
   toggleSaved: (id: string) => void
   setNote: (id: string, note: string) => void
+  /** Take another piece for this slot. Returns false when there is nothing to offer. */
+  swap: (form: Form, shorterOnly?: boolean) => boolean
   saveSettings: (next: Settings) => Promise<void>
   syncNow: () => Promise<void>
   restoreNow: () => Promise<void>
@@ -101,6 +108,25 @@ export function useApp(): App {
     () => (index.length ? dealFor(nightIndex, progress, pools, todayKey) : {}),
     [index.length, nightIndex, progress, pools, todayKey],
   )
+  const entries = useMemo(() => {
+    const out: Partial<Record<Form, IndexEntry | undefined>> = {}
+    for (const form of FORMS) {
+      const id = dealt[form]
+      out[form] = id ? byId.get(id) : undefined
+    }
+    return out
+  }, [dealt, byId])
+
+  const record = progress.nights[todayKey]
+  const estimate = useMemo(() => estimateNight(entries, record?.done ?? []), [entries, record?.done])
+  const suggestSwap = useMemo(
+    () =>
+      overTarget(estimate, settings.nightlyMinutes)
+        ? heaviestSlot(estimate, record?.done ?? [])
+        : null,
+    [estimate, settings.nightlyMinutes, record?.done],
+  )
+
   const stats = useMemo(() => computeStats(progress, todayKey), [progress, todayKey])
   const msToRollover = useMemo(
     () => msUntilRollover(new Date(now), settings.timeZone, settings.rolloverHour),
@@ -188,6 +214,31 @@ export function useApp(): App {
     [commit],
   )
 
+  const swap = useCallback(
+    (form: Form, shorterOnly = false) => {
+      const current = latest.current.progress
+      const night = current.nights[todayKey]
+      const currentId = night?.dealt[form]
+      const currentWords = currentId ? byId.get(currentId)?.words : undefined
+
+      const next = alternative(
+        nightIndex,
+        current.salt,
+        form,
+        pools,
+        consumedBefore(current, nightIndex),
+        night?.passed?.[form] ?? [],
+        (id) => byId.get(id)?.words ?? 0,
+        shorterOnly && currentWords ? currentWords : undefined,
+      )
+      if (!next) return false
+
+      commit(swapSlotOn(current, todayKey, form, next), true)
+      return true
+    },
+    [commit, todayKey, nightIndex, pools, byId],
+  )
+
   const saveSettings = useCallback(async (next: Settings) => {
     setSettings(next)
     await set(KEYS.settings, next)
@@ -210,7 +261,7 @@ export function useApp(): App {
 
   return {
     ready, error, settings, progress, index, byId, pools, todayKey, nightIndex,
-    dealt, stats, msToRollover, syncState, syncMessage,
-    toggleDone, toggleSaved, setNote, saveSettings, syncNow: runSync, restoreNow,
+    dealt, entries, estimate, suggestSwap, stats, msToRollover, syncState, syncMessage,
+    toggleDone, toggleSaved, setNote, swap, saveSettings, syncNow: runSync, restoreNow,
   }
 }

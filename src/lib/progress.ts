@@ -84,6 +84,31 @@ export function recordDeal(
   }
 }
 
+/**
+ * Pass a piece over for tonight and take another in its place.
+ *
+ * The piece is not lost: it is recorded as passed, which keeps it out of tonight's
+ * redraws and returns it to the pool for a night you have more time.
+ */
+export function swapSlot(progress: Progress, key: string, form: Form, nextId: string): Progress {
+  const existing = progress.nights[key] ?? { dealt: {}, done: [] }
+  const current = existing.dealt[form]
+  const passedSoFar = existing.passed?.[form] ?? []
+
+  const record: NightRecord = {
+    ...existing,
+    dealt: { ...existing.dealt, [form]: nextId },
+    // You cannot have read the piece you just swapped away.
+    done: existing.done.filter((f) => f !== form),
+    passed: {
+      ...existing.passed,
+      [form]: current && !passedSoFar.includes(current) ? [...passedSoFar, current] : passedSoFar,
+    },
+    completedAt: undefined,
+  }
+  return touch({ ...progress, nights: { ...progress.nights, [key]: record } })
+}
+
 export function toggleDone(progress: Progress, key: string, form: Form): Progress {
   const existing = progress.nights[key] ?? { dealt: {}, done: [] }
   const done = existing.done.includes(form)
@@ -129,12 +154,22 @@ export function merge(a: Progress, b: Progress): Progress {
     }
     const done = FORMS.filter((f) => x.done.includes(f) || y.done.includes(f))
     // Prefer the deal that is more settled; fall back to a stable tiebreak.
-    const rank = (r: NightRecord) => [r.done.length, FORMS.map((f) => r.dealt[f] ?? '').join('|')] as const
+    const rank = (r: NightRecord) =>
+      [
+        r.done.length,
+        FORMS.reduce((n, f) => n + (r.passed?.[f]?.length ?? 0), 0),
+        FORMS.map((f) => r.dealt[f] ?? '').join('|'),
+      ] as const
     const [rx, ry] = [rank(x), rank(y)]
-    const winner = rx[0] !== ry[0] ? (rx[0] > ry[0] ? x : y) : rx[1] <= ry[1] ? x : y
+    const winner =
+      rx[0] !== ry[0] ? (rx[0] > ry[0] ? x : y)
+      : rx[1] !== ry[1] ? (rx[1] > ry[1] ? x : y)
+      : rx[2] <= ry[2] ? x : y
     const completedAt = [x.completedAt, y.completedAt].filter(Boolean).sort()[0]
     nights[key] = {
+      // A deal and the pieces passed over to reach it are one chain: they travel together.
       dealt: { ...winner.dealt },
+      passed: winner.passed ? { ...winner.passed } : undefined,
       done,
       completedAt: done.length === FORMS.length ? (completedAt ?? new Date().toISOString()) : undefined,
     }

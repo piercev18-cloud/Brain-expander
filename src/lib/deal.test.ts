@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildPools, consumedBefore, dealFor, dealNight } from './deal'
-import { emptyProgress, isComplete, toggleDone, recordDeal } from './progress'
+import { alternative, buildPools, consumedBefore, dealFor, dealNight } from './deal'
+import { emptyProgress, isComplete, swapSlot, toggleDone, recordDeal } from './progress'
 import { FORMS, type IndexEntry } from './types'
 import { addDays } from './night'
 
@@ -99,5 +99,86 @@ describe('dealing', () => {
     const small = buildPools(corpus(500))
     const grown = buildPools(corpus(1200))
     expect(grown.poem.slice(0, 500)).toEqual(small.poem)
+  })
+})
+
+describe('swapping', () => {
+  const words = new Map<string, number>()
+  const pools = buildPools(
+    (() => {
+      const out: IndexEntry[] = []
+      for (const form of FORMS) {
+        for (let i = 0; i < 40; i++) {
+          const id = `${form}-${String(i).padStart(4, '0')}`
+          // A spread of lengths, so "something shorter" has somewhere to go.
+          words.set(id, 500 + i * 300)
+          out.push({ id, form, title: id, author: 'Anon', fields: ['literature'], words: words.get(id)!, mode: 'full', source: 't' })
+        }
+      }
+      return out
+    })(),
+  )
+  const wordsOf = (id: string) => words.get(id) ?? 0
+
+  it('offers a genuinely shorter piece when asked for one', () => {
+    const current = words.get('essay-0020')!
+    const next = alternative(0, 'salt', 'essay', pools, new Set(), [], wordsOf, current)
+    expect(next).not.toBeNull()
+    expect(wordsOf(next!)).toBeLessThan(current)
+  })
+
+  it('says no rather than quietly serving something longer', () => {
+    // Nothing in the pool is shorter than the shortest piece in it.
+    const shortest = words.get('essay-0000')!
+    expect(alternative(0, 'salt', 'essay', pools, new Set(), [], wordsOf, shortest)).toBeNull()
+  })
+
+  it('is stable: the same swap offers the same piece on a reload', () => {
+    const a = alternative(3, 'salt', 'story', pools, new Set(), ['story-0007'], wordsOf)
+    const b = alternative(3, 'salt', 'story', pools, new Set(), ['story-0007'], wordsOf)
+    expect(a).toBe(b)
+  })
+
+  it('never offers a piece already passed over tonight', () => {
+    const passed: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const next = alternative(5, 'salt', 'poem', pools, new Set(), passed, wordsOf)
+      expect(next).not.toBeNull()
+      expect(passed).not.toContain(next)
+      passed.push(next!)
+    }
+  })
+
+  it('never offers something already read on an earlier night', () => {
+    const consumed = new Set(['essay-0003', 'essay-0004'])
+    for (let i = 0; i < 20; i++) {
+      const next = alternative(i, 'salt', 'essay', pools, consumed, [], wordsOf)
+      expect(consumed.has(next!)).toBe(false)
+    }
+  })
+
+  it('returns a passed-over piece to the pool on a later night', () => {
+    let progress = emptyProgress(START, 'salt')
+    const dealt = dealFor(0, progress, pools, START)
+    const original = dealt.essay!
+    progress = recordDeal(progress, START, dealt)
+    progress = swapSlot(progress, START, 'essay', 'essay-0039')
+
+    expect(progress.nights[START].dealt.essay).toBe('essay-0039')
+    expect(progress.nights[START].passed?.essay).toEqual([original])
+    // Passed over, not read — so it was never consumed and can come back.
+    expect(consumedBefore(progress, 1).has(original)).toBe(false)
+  })
+
+  it('clears a completed night when a slot is swapped out from under it', () => {
+    let progress = emptyProgress(START, 'salt')
+    progress = recordDeal(progress, START, { story: 'story-0001', poem: 'poem-0001', essay: 'essay-0001' })
+    for (const form of FORMS) progress = toggleDone(progress, START, form)
+    expect(isComplete(progress.nights[START])).toBe(true)
+
+    progress = swapSlot(progress, START, 'essay', 'essay-0030')
+    expect(isComplete(progress.nights[START])).toBe(false)
+    expect(progress.nights[START].done).toEqual(['story', 'poem'])
+    expect(progress.nights[START].completedAt).toBeUndefined()
   })
 })

@@ -1,4 +1,5 @@
-import type { Field, IndexEntry, Item } from './types'
+import { estimateMinutes, formatMinutes } from './curation'
+import type { Field, Form, IndexEntry, Item } from './types'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -42,16 +43,10 @@ export function prefetch(ids: string[]): void {
   for (const id of ids) void loadItem(id).catch(() => undefined)
 }
 
-/** Deliberately unhurried: this is bedtime reading, not a commute. */
-export function readingMinutes(words: number): number {
-  return Math.max(1, Math.round(words / 200))
-}
-
 /** Null when the length is unknown — a link-out must not claim a reading time it cannot know. */
-export function readingTime(words: number): string | null {
+export function readingTime(form: Form, words: number): string | null {
   if (!words) return null
-  const minutes = readingMinutes(words)
-  return minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} hr`
+  return formatMinutes(estimateMinutes(form, words))
 }
 
 /**

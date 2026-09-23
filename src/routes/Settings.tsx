@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { TARGET_NIGHTS, type Settings as SettingsShape } from '../lib/types'
+import { NIGHTLY_OPTIONS, formatMinutes } from '../lib/curation'
 import { merge, withDerived } from '../lib/progress'
 import { KEYS, set } from '../lib/store'
 import type { App } from '../lib/useApp'
@@ -106,6 +107,27 @@ export function Settings({ app }: { app: App }) {
         </select>
         <p className="field__hint">
           Everything read between this hour and the same hour tomorrow counts as one night.
+        </p>
+      </div>
+
+      <div className="field">
+        <label className="field__label">How long you usually have</label>
+        <div className="filters">
+          {NIGHTLY_OPTIONS.map((option) => (
+            <button
+              key={String(option)}
+              className={`chip${draft.nightlyMinutes === option ? ' chip--on' : ''}`}
+              onClick={() => update('nightlyMinutes', option)}
+            >
+              {option === null ? 'No target' : formatMinutes(option)}
+            </button>
+          ))}
+        </div>
+        <p className="field__hint">
+          A target, never a limit. Nothing is kept out of the corpus for being long, and
+          nothing stops you reading a piece that runs over. When a night is estimated past
+          this, the app offers to swap the longest piece for a shorter one and put that piece
+          back in the pool for another night.
         </p>
       </div>
 

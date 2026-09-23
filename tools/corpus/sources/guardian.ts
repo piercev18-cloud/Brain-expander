@@ -1,5 +1,5 @@
 import { agent, countWords, polite, slug, type Ctx, type RawItem, type Source } from '../shared'
-import { SLOT_WORDS } from '../../../src/lib/budget'
+import { CORPUS_BOUNDS } from '../../../src/lib/curation'
 
 interface Result {
   id: string
@@ -69,9 +69,8 @@ export const guardian: Source = {
           if (out.length >= ctx.limit) break
           const summary = stripHtml(article.fields?.trailText ?? '')
           const words = Number(article.fields?.wordcount ?? 0)
-          // Long-form, but still a bedtime read: below the floor it is news,
-          // above the ceiling it will not fit inside the night.
-          const [min, max] = SLOT_WORDS.essay
+          // Long-form only: below the floor it is news rather than an essay.
+          const [min, max] = CORPUS_BOUNDS.essay
           if (!summary || words < min || words > max) continue
 
           out.push({

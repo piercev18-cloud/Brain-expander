@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { FIELDS, type IndexEntry, type Item } from '../../src/lib/types'
 import { countWords, slug } from './shared'
-import { SLOT_WORDS, minutes, withinBudget } from '../../src/lib/budget'
+import { CORPUS_BOUNDS, withinCorpus } from '../../src/lib/curation'
 
 const OUT = join(import.meta.dirname, '..', '..', 'public', 'corpus')
 const ITEMS = join(OUT, 'items')
@@ -257,11 +257,7 @@ I hear it in the deep heart's core.`,
   },
 ]
 
-/**
- * Canonical Wikisource works, linked rather than stored until the workflow hydrates
- * them. Deliberately short: anything that cannot fit the night budget is left for the
- * corpus workflow to find, rather than shipped here and rejected by the build.
- */
+/** Canonical Wikisource works, linked rather than stored until the workflow hydrates them. */
 const LINKED: Seed[] = [
   {
     form: 'story', title: 'The Tell-Tale Heart', author: 'Edgar Allan Poe', year: 1843,
@@ -276,6 +272,41 @@ const LINKED: Seed[] = [
     url: 'https://en.wikisource.org/wiki/The_Gift_of_the_Magi',
     sourceWords: 2100,
     summary: 'A young couple with almost nothing each sell the one thing they own to buy the other a Christmas present. The most famous ending in American short fiction, and still a genuinely good argument about what value is.',
+  },
+  {
+    form: 'story', title: 'An Occurrence at Owl Creek Bridge', author: 'Ambrose Bierce', year: 1890,
+    fields: ['psychology', 'history'],
+    url: 'https://en.wikisource.org/wiki/An_Occurrence_at_Owl_Creek_Bridge',
+    sourceWords: 3700,
+    summary: 'A Confederate sympathiser stands on a railway bridge with a noose around his neck. What happens next made this the template for every unreliable-time story written since.',
+  },
+  {
+    form: 'story', title: 'The Open Boat', author: 'Stephen Crane', year: 1897,
+    fields: ['nature', 'philosophy'],
+    url: 'https://en.wikisource.org/wiki/The_Open_Boat',
+    sourceWords: 8300,
+    summary: 'Four men in a dinghy off the Florida coast after their ship goes down. Drawn from a wreck Crane actually survived, it is the clearest statement in American fiction that nature is not hostile so much as indifferent.',
+  },
+  {
+    form: 'essay', title: 'Self-Reliance', author: 'Ralph Waldo Emerson', year: 1841,
+    fields: ['philosophy', 'psychology'],
+    url: 'https://en.wikisource.org/wiki/Self-Reliance',
+    sourceWords: 10700,
+    summary: 'Emerson argues that conformity is a kind of self-theft, and that the thought you dismiss as merely your own is the one worth keeping. The founding document of American individualism, and more bracing than its reputation suggests.',
+  },
+  {
+    form: 'essay', title: 'Civil Disobedience', author: 'Henry David Thoreau', year: 1849,
+    fields: ['politics', 'philosophy'],
+    url: 'https://en.wikisource.org/wiki/Civil_Disobedience',
+    sourceWords: 10000,
+    summary: 'Written after a night in jail for refusing a tax that funded a war he opposed. Thoreau works out when a citizen is obliged to break a law, an argument that later reached Gandhi and King almost intact.',
+  },
+  {
+    form: 'essay', title: 'A Modest Proposal', author: 'Jonathan Swift', year: 1729,
+    fields: ['politics', 'economics'],
+    url: 'https://en.wikisource.org/wiki/A_Modest_Proposal',
+    sourceWords: 3400,
+    summary: 'A reasonable-sounding economic plan for relieving Irish poverty, argued with statistics and perfect composure to a conclusion that indicts everyone who took the reasoning seriously. Still the sharpest satire in English.',
   },
 ]
 
@@ -308,13 +339,10 @@ mkdirSync(ITEMS, { recursive: true })
 const added: IndexEntry[] = []
 for (const seed of [...POEMS, ...LINKED]) {
   const item = toItem(seed)
-  // The same gate the builder applies, so the starter corpus can never be the
-  // reason a night runs long.
-  if (!withinBudget(item.form, item.words)) {
-    const [min, max] = SLOT_WORDS[item.form]
-    console.error(
-      `skipped "${item.title}": ${item.words} words (${Math.round(minutes(item.words))} min), slot allows ${min}-${max}`,
-    )
+  // The same sanity check the builder applies. Length is not a reason to exclude.
+  if (!withinCorpus(item.form, item.words)) {
+    const [min, max] = CORPUS_BOUNDS[item.form]
+    console.error(`skipped "${item.title}": ${item.words} words, outside ${min}-${max}`)
     continue
   }
   if (known.has(item.id)) continue

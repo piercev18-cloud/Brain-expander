@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { FIELDS, type IndexEntry, type Item } from '../../src/lib/types'
 import { countWords, decideMode, mayStoreFullText, type RawItem, type Source } from './shared'
-import { NIGHT_BUDGET_MINUTES, SLOT_WORDS, minutes, withinBudget, worstCaseNightMinutes } from '../../src/lib/budget'
+import { CORPUS_BOUNDS, estimateMinutes, formatMinutes, withinCorpus } from '../../src/lib/curation'
 import { tagFields } from './tag'
 import { poetrydb } from './sources/poetrydb'
 import { wikisource } from './sources/wikisource'
@@ -133,19 +133,22 @@ async function main() {
   const untagged = fresh.filter((item) => item.fields.length === 0)
   const illegal = fresh.filter((item) => item.mode === 'full' && !mayStoreFullText(item.license))
   const unreadable = fresh.filter((item) => item.mode === 'full' && !item.body)
-  // Checked across the whole corpus, not only this run's additions: an item that
-  // busts the budget breaks the promise however it got in.
-  const overlong = index.filter((item) => !withinBudget(item.form, item.words))
+  /*
+   * Length is NOT a gate. A long piece is a curation decision made at deal time, in
+   * the app, by you — not something the corpus quietly refuses to carry. The only
+   * length check here keeps whole books and fragments out.
+   */
+  const malformed = index.filter((item) => !withinCorpus(item.form, item.words))
 
-  if (untagged.length || illegal.length || unreadable.length || overlong.length) {
+  if (untagged.length || illegal.length || unreadable.length || malformed.length) {
     if (untagged.length) log(`FAIL: ${untagged.length} items carry no field tag`)
     if (illegal.length) log(`FAIL: ${illegal.length} items store full text without a redistributable licence`)
     if (unreadable.length) log(`FAIL: ${unreadable.length} items claim full text but have no body`)
-    for (const item of overlong.slice(0, 10)) {
-      const [min, max] = SLOT_WORDS[item.form]
-      log(`FAIL: ${item.form} "${item.title}" is ${item.words} words (${Math.round(minutes(item.words))} min); the slot allows ${min}-${max}`)
+    for (const item of malformed.slice(0, 10)) {
+      const [min, max] = CORPUS_BOUNDS[item.form]
+      log(`FAIL: ${item.form} "${item.title}" is ${item.words} words; a ${item.form} must be ${min}-${max}`)
     }
-    if (overlong.length > 10) log(`FAIL: and ${overlong.length - 10} more outside the night budget`)
+    if (malformed.length > 10) log(`FAIL: and ${malformed.length - 10} more outside the corpus bounds`)
     process.exit(1)
   }
 
@@ -157,7 +160,12 @@ async function main() {
     log(`  ${form.padEnd(6)} ${String(rows.length).padStart(5)}  (${full} readable in-app, ${rows.length - full} link out)`)
   }
   log(`  nights available: ${Math.min(...(['story', 'poem', 'essay'] as const).map((f) => index.filter((e) => e.form === f).length))}`)
-  log(`  longest possible night: ${worstCaseNightMinutes().toFixed(0)} min (budget ${NIGHT_BUDGET_MINUTES})`)
+  /* Reported, never enforced: the app offers a swap, it does not refuse the piece. */
+  const typical = (['story', 'poem', 'essay'] as const).map((form) => {
+    const rows = index.filter((e) => e.form === form && e.words > 0).map((e) => estimateMinutes(form, e.words)).sort((a, b) => a - b)
+    return rows.length ? rows[Math.floor(rows.length / 2)] : 0
+  })
+  log(`  median night: ${formatMinutes(typical.reduce((a, b) => a + b, 0))}`)
   log('')
   for (const field of FIELDS) {
     const count = index.filter((e) => e.fields.includes(field)).length
