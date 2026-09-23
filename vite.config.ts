@@ -51,6 +51,12 @@ export default defineConfig({
       },
     })] : []),
   ],
+  build: {
+    // A classic script has no module semantics to fail on; used by the standalone build.
+    ...(process.env.APP_IIFE === '1'
+      ? { rollupOptions: { output: { format: 'iife' as const, inlineDynamicImports: true } } }
+      : {}),
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],

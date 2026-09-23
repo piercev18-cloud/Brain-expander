@@ -162,7 +162,7 @@ export function Settings({ app }: { app: App }) {
         Without a token the count lives only on this phone.
       </p>
 
-      <div className="field" hidden={PREVIEW}>
+      <div className="field" style={{ display: PREVIEW ? 'none' : undefined }}>
         <label className="field__label" htmlFor="token">Fine-grained access token</label>
         <input
           id="token" type="password" autoComplete="off" placeholder="github_pat_…"
@@ -174,47 +174,59 @@ export function Settings({ app }: { app: App }) {
         </p>
       </div>
 
-      <div className="field">
+      <div className="field" style={{ display: PREVIEW ? 'none' : undefined }}>
         <label className="field__label" htmlFor="owner">Owner</label>
         <input id="owner" value={draft.owner} onChange={(e) => update('owner', e.target.value.trim())} />
       </div>
-      <div className="field">
+      <div className="field" style={{ display: PREVIEW ? 'none' : undefined }}>
         <label className="field__label" htmlFor="repo">Repository</label>
         <input id="repo" value={draft.repo} onChange={(e) => update('repo', e.target.value.trim())} />
         <p className="field__hint">
           Point this at a private repository if you would rather the reading log not be public.
         </p>
       </div>
-      <div className="field">
+      <div className="field" style={{ display: PREVIEW ? 'none' : undefined }}>
         <label className="field__label" htmlFor="branch">Branch</label>
         <input id="branch" value={draft.branch} onChange={(e) => update('branch', e.target.value.trim())} />
       </div>
-      <div className="field">
+      <div className="field" style={{ display: PREVIEW ? 'none' : undefined }}>
         <label className="field__label" htmlFor="path">File</label>
         <input id="path" value={draft.path} onChange={(e) => update('path', e.target.value.trim())} />
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 28 }}>
-        <button className="button" disabled={busy} onClick={() => run('Sync', app.syncNow)}>
-          Sync now
-        </button>
-        <button className="button button--quiet" disabled={busy} onClick={() => run('Restore', app.restoreNow)}>
-          Restore from GitHub
-        </button>
-      </div>
+      {!PREVIEW && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 28 }}>
+          <button className="button" disabled={busy} onClick={() => run('Sync', app.syncNow)}>
+            Sync now
+          </button>
+          <button className="button button--quiet" disabled={busy} onClick={() => run('Restore', app.restoreNow)}>
+            Restore from GitHub
+          </button>
+        </div>
+      )}
 
-      <h2 className="night__label">Backup</h2>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button className="button button--quiet" onClick={exportJson}>Export</button>
-        <button className="button button--quiet" onClick={() => fileRef.current?.click()}>Import</button>
-        <input
-          ref={fileRef} type="file" accept="application/json" hidden
-          onChange={(e) => e.target.files?.[0] && void importJson(e.target.files[0])}
-        />
-      </div>
-      <p className="field__hint" style={{ marginTop: 10, marginBottom: 32 }}>
-        Import merges rather than replaces, so a stale backup can never shorten your count.
-      </p>
+      {/*
+        * A preview has no durable store to back up, and an artifact frame refuses
+        * downloads outright, so the controls are not rendered at all. Note that an
+        * inline `display` beats the user agent's `[hidden] { display: none }`, which
+        * is why this is a conditional render rather than a hidden attribute.
+        */}
+      {!PREVIEW && (
+        <>
+          <h2 className="night__label">Backup</h2>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="button button--quiet" onClick={exportJson}>Export</button>
+            <button className="button button--quiet" onClick={() => fileRef.current?.click()}>Import</button>
+            <input
+              ref={fileRef} type="file" accept="application/json" hidden
+              onChange={(e) => e.target.files?.[0] && void importJson(e.target.files[0])}
+            />
+          </div>
+          <p className="field__hint" style={{ marginTop: 10, marginBottom: 32 }}>
+            Import merges rather than replaces, so a stale backup can never shorten your count.
+          </p>
+        </>
+      )}
     </>
   )
 }
