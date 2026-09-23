@@ -21,20 +21,25 @@ The three are dealt from the corpus by a seeded draw, so a refresh never re-roll
 and nothing repeats across all 1000 nights. A night you open but do not finish returns
 its pieces to the pool: skipping a night costs you nothing.
 
-**A night always fits in half an hour.** Bradbury's own estimate for the story was
-"ten minutes, fifteen minutes", so each slot carries a word budget and no night can run
-past 30 minutes even when all three pieces come in long:
+**Curation, not rationing.** Length is never a reason a piece is kept out: a 45-minute
+essay you want to read is worth more than a 12-minute one you do not. Time is handled at
+deal time instead, visibly, by you — in `src/lib/curation.ts`.
 
-| Slot | Words | Minutes at 200 wpm |
-|---|---|---|
-| Short story | 900 – 2,800 | 4.5 – 14 |
-| Poem | 40 – 500 | 0.2 – 2.5 |
-| Essay | 700 – 2,400 | 3.5 – 12 |
-| **Longest possible night** | **5,700** | **28.5** |
+Tonight states its own length up front, estimated per form: prose at 220 words a minute,
+verse at 90, because a poem is read slowly and usually twice. Settings carries a soft
+target (default 30 minutes, with **No target** as a real option) which decides exactly
+one thing: when the app offers a swap.
 
-Those numbers live in one place, `src/lib/budget.ts`. Every source is gated against
-them, the build fails if anything slips through, and the Tonight screen totals what is
-actually left to read. Change the table there and the whole pipeline follows.
+When a night runs past the target, the app names the single heaviest *unread* piece and
+offers something shorter, or "Read it anyway" — it never suggests trimming the poem,
+because that saves nothing. Every card also carries a Swap control for a piece that
+simply is not tonight's. A piece you pass over is recorded, not lost: it stays out of
+tonight's redraws and returns to the pool for a night with more time.
+
+Two details that matter in use. Swaps are deterministic in how many you have already
+made, so the offer survives a reload instead of gambling again. And asking for something
+shorter when nothing shorter exists says so, rather than quietly handing you something
+longer.
 
 Flag anything worth returning to and it lands in **Saved**, with a note if you want one.
 **Fields** shows where your reading actually concentrates — bars scaled against your
@@ -98,10 +103,10 @@ Sources, all free, most needing no key at all:
 | Short story | Wikisource, Gutenberg | Clarkesworld, Strange Horizons, Reactor |
 | Essay | Wikisource, Gutenberg | The Guardian, Aeon, Nautilus, Quanta, The Marginalian |
 
-A piece read at the source still has to fit the budget, so its length must be knowable
-before it enters the corpus: The Guardian reports a word count, and the RSS feeds carry
-the full article in `content:encoded`. A feed item whose length cannot be established is
-dropped rather than risk a 40-minute essay landing in a 30-minute night.
+A piece read at the source still needs a knowable length, or the app could not estimate
+the night honestly: The Guardian reports a word count, and the RSS feeds carry the full
+article in `content:encoded`. A feed item whose length cannot be established is dropped
+rather than shown with no reading time at all.
 
 **arXiv is included but off by default.** A research paper has no upper bound on length
 and is not a bedtime essay. Run it deliberately with `npm run corpus -- --only arxiv` if
@@ -127,7 +132,7 @@ and a mistake is fixed by adding one line to `tools/corpus/overrides.json`.
 
 ```bash
 npm run dev                      # local dev server
-npm test                         # night boundaries, deal determinism, merge safety, budget
+npm test                         # night boundaries, deal determinism, merge safety, estimates
 npm run build                    # production build
 npm run corpus -- --dry-run      # collect and validate, write nothing
 npm run corpus -- --limit 40     # cap each source
@@ -135,6 +140,13 @@ npm run corpus -- --only feeds   # run one source
 CORPUS_TIMEOUT_MS=1500 npm run corpus -- --dry-run   # fail fast on a restricted network
 npx tsx tools/corpus/bootstrap.ts   # the small starter corpus
 node tools/make-icons.mjs           # regenerate app icons
+
+# One self-contained HTML file: bundle, styles and corpus all inline, as a classic
+# script with no network requests after load. Writes standalone.html (a complete
+# document, openable straight from disk) and fragment.html (content only, for a host
+# that supplies its own skeleton). Both hide the GitHub and backup controls, since a
+# preview has no durable store and offering them dead would be worse.
+node tools/make-standalone.mjs
 ```
 
 The corpus builder needs network access to the sources, so it is meant to run in Actions
