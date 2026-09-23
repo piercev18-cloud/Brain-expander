@@ -1,14 +1,18 @@
 import { estimateMinutes, formatMinutes } from './curation'
 import type { Field, Form, IndexEntry, Item } from './types'
 
-const BASE = import.meta.env.BASE_URL
+/*
+ * Vite rewrites `new URL(..., import.meta.url)` into a build-time asset reference,
+ * so the corpus is addressed through the configured base path instead.
+ */
+const corpusUrl = (path: string) => `${import.meta.env.BASE_URL}corpus/${path}`
 
 let indexPromise: Promise<IndexEntry[]> | null = null
 const items = new Map<string, Promise<Item>>()
 
 export function loadIndex(): Promise<IndexEntry[]> {
   if (!indexPromise) {
-    indexPromise = fetch(`${BASE}corpus/index.json`)
+    indexPromise = fetch(corpusUrl('index.json'))
       .then((r) => {
         if (!r.ok) throw new Error(`corpus index unavailable (${r.status})`)
         return r.json()
@@ -24,7 +28,7 @@ export function loadIndex(): Promise<IndexEntry[]> {
 export function loadItem(id: string): Promise<Item> {
   let pending = items.get(id)
   if (!pending) {
-    pending = fetch(`${BASE}corpus/items/${id}.json`)
+    pending = fetch(corpusUrl(`items/${id}.json`))
       .then((r) => {
         if (!r.ok) throw new Error(`piece unavailable (${r.status})`)
         return r.json()

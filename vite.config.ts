@@ -5,11 +5,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Served from https://<user>.github.io/Brain-expander/
 const base = process.env.APP_BASE ?? '/Brain-expander/'
 
+const withPwa = process.env.APP_PWA !== 'off'
+
 export default defineConfig({
   base,
   plugins: [
     react(),
-    VitePWA({
+    ...(withPwa ? [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
@@ -47,7 +49,7 @@ export default defineConfig({
           },
         ],
       },
-    }),
+    })] : []),
   ],
   test: {
     environment: 'node',

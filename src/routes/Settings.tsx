@@ -5,6 +5,8 @@ import { merge, withDerived } from '../lib/progress'
 import { KEYS, set } from '../lib/store'
 import type { App } from '../lib/useApp'
 
+const PREVIEW = import.meta.env.VITE_PREVIEW === '1'
+
 const ZONES = [
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
   'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Australia/Sydney', 'UTC',
@@ -149,12 +151,18 @@ export function Settings({ app }: { app: App }) {
       </div>
 
       <h2 className="night__label" style={{ marginTop: 28 }}>Durability</h2>
+      {PREVIEW && (
+        <div className="status" style={{ marginTop: 10 }}>
+          This is a preview build. It cannot reach GitHub, so your progress stays on this
+          device and this page only — start your real thousand nights on the deployed app.
+        </div>
+      )}
       <p className="field__hint" style={{ marginTop: -6, marginBottom: 16 }}>
         Every tap is saved on this device first, then committed to GitHub behind it.
         Without a token the count lives only on this phone.
       </p>
 
-      <div className="field">
+      <div className="field" hidden={PREVIEW}>
         <label className="field__label" htmlFor="token">Fine-grained access token</label>
         <input
           id="token" type="password" autoComplete="off" placeholder="github_pat_…"
